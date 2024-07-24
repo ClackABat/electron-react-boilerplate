@@ -1,22 +1,32 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
+import { useAtom } from 'jotai';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import FileDropzone from './FileDropzone';
 import DraggableCard from './DraggableCard';
-import { Image, SaveableFile, ViewMode } from '../types';
+import { SaveableFile, ViewMode } from '../types';
 import ViewSwitcher from './ViewSwitcher';
 import ClearAllIcon from '../icons/ClearAllIcon';
 import IconButton from './IconButton';
-
-const DEFAULT_NUMBER_PLACEMENTS = 15;
-const IMAGE_PLACEMENTS = Array.from(Array(DEFAULT_NUMBER_PLACEMENTS).keys());
+import FileDropzone from './FileDropzone';
+import { currentImagesAtom, settingsAtom } from '../atoms';
+import { Channels } from '../../channels';
 
 export default function ImageTool() {
-  const [images, setImages] = React.useState<Image[]>(
-    IMAGE_PLACEMENTS.map((id) => ({ file: null, id })),
-  );
+  const [images, setImages] = useAtom(currentImagesAtom);
 
-  const [viewMode, setViewMode] = React.useState<ViewMode>(ViewMode.Grid);
+  const [settings, setSettings] = useAtom(settingsAtom);
+
+  useEffect(() => {
+    // Create initial image slots
+    const initialImages = Array.from(
+      { length: settings.numImageSlots },
+      (_, i) => ({
+        id: i,
+        file: null,
+      }),
+    );
+    setImages(initialImages);
+  }, [setImages, settings.numImageSlots]);
 
   const handleDrop = (files: File[]) => {
     const newImages = [...images];
@@ -42,11 +52,11 @@ export default function ImageTool() {
       newImages[hoverIndex] = dragCard;
       setImages(newImages);
     },
-    [images],
+    [images, setImages],
   );
 
   const handleViewModeChange = (mode: ViewMode) => {
-    setViewMode(mode);
+    setSettings({ ...settings, viewMode: mode });
   };
 
   const handleClearAll = () => {
@@ -54,10 +64,23 @@ export default function ImageTool() {
     setImages(newImages);
   };
 
+  const ftpTest = () => {
+    console.log(images);
+    const filePaths = images.map((image) => image.file?.url).filter(Boolean);
+    console.log(filePaths);
+    window.electron.ipcRenderer.sendMessage(Channels.UPLOAD_FTP, filePaths);
+  };
+
   return (
-    <div className="group container mx-auto p-4" data-view-mode={viewMode}>
+    <div
+      className="group container mx-auto p-4"
+      data-view-mode={settings.viewMode}
+    >
       <div className="flex">
-        <ViewSwitcher viewMode={viewMode} onViewChange={handleViewModeChange} />
+        <ViewSwitcher
+          viewMode={settings.viewMode}
+          onViewChange={handleViewModeChange}
+        />
         <IconButton
           name="clear-all"
           onClick={handleClearAll}
@@ -66,6 +89,9 @@ export default function ImageTool() {
           <ClearAllIcon />
         </IconButton>
       </div>
+      <button type="button" onClick={ftpTest}>
+        FTP
+      </button>
       <form>
         <FileDropzone onDrop={handleDrop} />
         <DndProvider backend={HTML5Backend}>
